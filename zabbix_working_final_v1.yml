@@ -1,0 +1,66 @@
+# falta corrigir a comunicação com o MySQL através do user Zabbix
+# que atenda o Charset UTF8, está usando o latin no modo automático
+
+version: '3'
+
+services:
+  mysql-server:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: "dart@2020"
+      MYSQL_CHARSET: "utf-8"
+      MYSQL_DATABASE: "zabbix"
+      MYSQL_USER: "zabbix"
+      MYSQL_PASSWORD: "zabbix"
+#    ports:
+#      - "3306:3306"
+    volumes:
+      - my-datavolume:/var/lib/mysql
+
+  zabbixserver:
+    image: zabbix/zabbix-server-mysql:alpine-4.4-latest
+    environment: 
+      DB_SERVER_HOST: "mysql-server"
+      MYSQL_CHARSET: "utf-8"
+      MYSQL_USER: "zabbix"
+      MYSQL_PASSWORD: "zabbix"
+    ports:
+      - "10051:10051"
+    depends_on: 
+      - mysql-server
+    links:
+      - mysql-server
+
+  zabbixfrontend:
+    image: zabbix/zabbix-web-apache-mysql:alpine-4.4-latest
+    environment: 
+      DB_SERVER_HOST: "mysql-server"
+      MYSQL_USER: "zabbix"
+      MYSQL_PASSWORD: "zabbix"
+      ZBX_SERVER_HOST: "zabbixserver"
+      PHP_TZ: "America/Sao_Paulo"
+    ports:
+      - "80:80"
+    depends_on: 
+      - mysql-server
+      - zabbixserver
+    links:
+      - mysql-server
+      - zabbixserver
+      
+  zabbixagent:
+    image: zabbix/zabbix-agent:alpine-4.4-latest
+    environment: 
+      ZBX_SERVER_HOST: "zabbixserver"
+      ZBX_HOSTNAME: "Zabbix-Server"
+    depends_on: 
+      - zabbixserver
+    links:
+      - zabbixserver      
+
+volumes:
+  my-datavolume:
+
+#networks:
+#  defatult:
+#    driver: custom-driver-1    
