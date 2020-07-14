@@ -1,7 +1,7 @@
 version: '3.5'
 services:
  zabbix-server:
-  image: zabbix/zabbix-server-mysql:alpine-4.4-latest
+  image: zabbix/zabbix-server-mysql:alpine-5.0-latest
   ports:
    - "10051:10051"
   volumes:
@@ -14,7 +14,7 @@ services:
    - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
    - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
    - ./zbx_env/var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
-   - ./zbx_env/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:ro
+   - ./zbx_env/var/lib/grafana/data:/var/lib/grafana
   links:
    - mysql-server:mysql-server
   ulimits:
@@ -37,91 +37,28 @@ services:
    - MYSQL_USER
    - MYSQL_PASSWORD
    - MYSQL_ROOT_PASSWORD
-  user: root
   depends_on:
    - mysql-server
   networks:
    zbx_net_backend:
      aliases:
       - zabbix-server
-      - zabbix-server-mysql
-      - zabbix-server-alpine-mysql
-      - zabbix-server-mysql-alpine
    zbx_net_frontend:
 #  devices:
 #   - "/dev/ttyUSB0:/dev/ttyUSB0"
   stop_grace_period: 30s
-  sysctls:
-   - net.ipv4.ip_local_port_range=1024 65000
-   - net.ipv4.conf.all.accept_redirects=0
-   - net.ipv4.conf.all.secure_redirects=0
-   - net.ipv4.conf.all.send_redirects=0
   labels:
    com.zabbix.description: "Zabbix server with MySQL database support"
-   com.zabbix.company: "Tupperware Brands Powered by Zabbix"
+   com.zabbix.company: "Zabbix LLC"
    com.zabbix.component: "zabbix-server"
    com.zabbix.dbtype: "mysql"
    com.zabbix.os: "alpine"
 
-
-# zabbix-proxy-mysql:
-#  image: zabbix/zabbix-proxy-mysql:alpine-4.4-latest
-#  ports:
-#   - "10071:10051"
-#  volumes:
-#   - /etc/localtime:/etc/localtime:ro
-#   - /etc/timezone:/etc/timezone:ro
-#   - ./zbx_env/usr/lib/zabbix/externalscripts:/usr/lib/zabbix/externalscripts:ro
-#   - ./zbx_env/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
-#   - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
-#   - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
-#   - ./zbx_env/var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
-#   - ./zbx_env/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:ro
-#  links:
-#   - zabbix-server:zabbix-server
-#   - zabbix-java-gateway:zabbix-java-gateway
-#  ulimits:
-#   nproc: 65535
-#   nofile:
-#    soft: 20000
-#    hard: 40000
-#  deploy:
-#   resources:
-#    limits:
-#      cpus: '0.70'
-#      memory: 512M
-#    reservations:
-#      cpus: '0.3'
-#      memory: 256M
-#  env_file:
-#   - .env_db_mysql_proxy
-#   - .env_prx
-#   - .env_prx_mysql
-#  user: root
-#  depends_on:
-#   - mysql-server
-#   - zabbix-java-gateway
-#   - zabbix-snmptraps
-#  networks:
-#   zbx_net_backend:
-#    aliases:
-#     - zabbix-proxy-mysql
-#     - zabbix-proxy-alpine-mysql
-#     - zabbix-proxy-mysql-alpine
-#   zbx_net_frontend:
-#  stop_grace_period: 30s
-#  labels:
-#   com.zabbix.description: "Zabbix proxy with MySQL database support"
-#   com.zabbix.company: "Zabbix LLC"
-#   com.zabbix.component: "zabbix-proxy"
-#   com.zabbix.dbtype: "mysql"
-#   com.zabbix.os: "alpine"
-
- zabbix-web-apache-mysql:
-  image: zabbix/zabbix-web-apache-mysql:alpine-4.4-latest
+ zabbix-frontend:
+  image: zabbix/zabbix-web-apache-mysql:alpine-5.0-latest
   ports:
-   - "80:80"
-#   - "443:443"
+   - "80:8080"
+   - "443:8443"
   links:
    - mysql-server:mysql-server
    - zabbix-server:zabbix-server
@@ -129,6 +66,7 @@ services:
    - /etc/localtime:/etc/localtime:ro
    - /etc/timezone:/etc/timezone:ro
    - ./zbx_env/etc/ssl/apache2:/etc/ssl/apache2:ro
+   - ./zbx_env/usr/share/zabbix/modules/:/usr/share/zabbix/modules/:ro
   deploy:
    resources:
     limits:
@@ -143,36 +81,33 @@ services:
   secrets:
    - MYSQL_USER
    - MYSQL_PASSWORD
-  user: root
   depends_on:
    - mysql-server
    - zabbix-server
   healthcheck:
-   test: ["CMD", "curl", "-f", "http://localhost"]
+   test: ["CMD", "curl", "-f", "http://localhost:8080/"]
    interval: 10s
    timeout: 5s
    retries: 3
-#   start_period: 30s
+   start_period: 30s
   networks:
    zbx_net_backend:
     aliases:
-     - zabbix-web-apache-mysql
-     - zabbix-web-apache-alpine-mysql
-     - zabbix-web-apache-mysql-alpine
+     - zabbix-frontend
    zbx_net_frontend:
   stop_grace_period: 10s
   sysctls:
    - net.core.somaxconn=65535
   labels:
    com.zabbix.description: "Zabbix frontend on Apache web-server with MySQL database support"
-   com.zabbix.company: "Tupperware Brands Powered by Zabbix"
+   com.zabbix.company: "Zabbix LLC"
    com.zabbix.component: "zabbix-frontend"
    com.zabbix.webserver: "apache2"
    com.zabbix.dbtype: "mysql"
    com.zabbix.os: "alpine"
 
  zabbix-agent:
-  image: zabbix/zabbix-agent:alpine-4.4-latest
+  image: zabbix/zabbix-agent:alpine-5.0-latest
   ports:
    - "10050:10050"
   volumes:
@@ -195,15 +130,12 @@ services:
    mode: global
   env_file:
    - .env_agent
-  user: root
   privileged: true
   pid: "host"
   networks:
    zbx_net_backend:
     aliases:
      - zabbix-agent
-     - zabbix-agent-passive
-     - zabbix-agent-alpine
   stop_grace_period: 5s
   labels:
    com.zabbix.description: "Zabbix agent"
@@ -213,7 +145,15 @@ services:
 
  mysql-server:
   image: mysql:8.0
-  command: [mysqld, --character-set-server=utf8, --collation-server=utf8_bin, --default-authentication-plugin=mysql_native_password]
+  command:
+   - mysqld
+   - --character-set-server=utf8
+   - --collation-server=utf8_bin
+   - --default-authentication-plugin=mysql_native_password
+#   - --require-secure-transport
+#   - --ssl-ca=/run/secrets/root-ca.pem
+#   - --ssl-cert=/run/secrets/server-cert.pem
+#   - --ssl-key=/run/secrets/server-key.pem
   volumes:
    - ./zbx_env/var/lib/mysql:/var/lib/mysql:rw
   env_file:
@@ -222,19 +162,40 @@ services:
    - MYSQL_USER
    - MYSQL_PASSWORD
    - MYSQL_ROOT_PASSWORD
-  user: root
   stop_grace_period: 1m
   networks:
    zbx_net_backend:
     aliases:
      - mysql-server
-     - zabbix-database
-     - mysql-database
+
+ grafana:
+  image: grafana/grafana:7.0.3
+  environment: 
+    - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
+    - GF_SERVER_PROTOCOL=http
+    - GF_SERVER_HTTP_PORT=3000
+  volumes:
+    - ./zbx_env/var/lib/grafana/data:/var/lib/grafana
+  networks:
+   zbx_net_backend:
+    aliases:
+     - grafana-frontend
+   zbx_net_frontend:
+  ports:
+    - "3000:3000"
+  deploy:
+    resources:
+      limits:
+        cpus: '0.70'
+        memory: 512M
+      reservations:
+        cpus: '0.5'
+        memory: 256M      
 
  db_data_mysql:
   image: busybox
   volumes:
-   - ./data/var/lib/mysql:/var/lib/mysql:rw
+   - ./zbx_env/var/lib/mysql:/var/lib/mysql:rw
 
 networks:
   zbx_net_frontend:
@@ -244,7 +205,7 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 172.16.238.0/24
+      - subnet: 172.16.238.0/28
   zbx_net_backend:
     driver: bridge
     driver_opts:
@@ -253,7 +214,7 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 172.16.239.0/24
+      - subnet: 172.16.239.0/28
 
 secrets:
   MYSQL_USER:
@@ -262,3 +223,13 @@ secrets:
     file: ./.MYSQL_PASSWORD
   MYSQL_ROOT_PASSWORD:
     file: ./.MYSQL_ROOT_PASSWORD
+#  client-key.pem:
+#    file: ./.ZBX_DB_KEY_FILE
+#  client-cert.pem:
+#    file: ./.ZBX_DB_CERT_FILE
+#  root-ca.pem:
+#    file: ./.ZBX_DB_CA_FILE
+#  server-cert.pem:
+#    file: ./.DB_CERT_FILE
+#  server-key.pem:
+#    file: ./.DB_KEY_FILE
